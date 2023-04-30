@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# output dist directory name.
+DIRNAME_OUTPUT='output'
+
+# local directory settings.
+DIR_MOUNT_TARGET="$1"
+FILENAME_INPUT="$2"
+FILENAME_OUTPUT="$3"
+
+DIR_OUTPUT_DIST="${DIR_MOUNT_TARGET}/${DIRNAME_OUTPUT}"
+
+# Docker container directory settings.
+DOCKER_IMAGE_FFMPEG='jrottenberg/ffmpeg'
+DOCKER_DIR_MOUNT_DIST='/ffmpeg'
+DOCKER_DIR_OUTPUT_DIST="/ffmpeg/${DIRNAME_OUTPUT}"
+
+INPUT_FILE_PATH="${DOCKER_DIR_MOUNT_DIST}/${FILENAME_INPUT}"
+OUTPUT_FILE_PATH="${DOCKER_DIR_OUTPUT_DIST}/${FILENAME_OUTPUT}"
+
+
+if [ -z "$(docker images -q ${FFMPEG_IMAGE})"  ]; then
+   echo "ERROR: ${FFMPEG_IMAGE} docker image does not exist." 1>&2
+   echo "Please download ${FFMPEG_IMAGE} docker image." 1>&2
+   echo "$ docker pull ${FFMPEG_IMAGE}" 1>&2
+
+   exit 1
+fi
+
+if !(type 'jq' > /dev/null 2>&1); then
+   echo "ERROR: jq command does not exist." 1>&2
+   echo "Please install jq command" 1>&2
+   echo "$ brew install jq" 1>&2
+
+   exit 1
+
+fi
+
+mkdir -p "${DIR_OUTPUT_DIST}"
+
+
+ebu_r128_general_value='I=-23:LRA=7:TP=-2.0'
+
+mp3_data_json="$(docker run --rm -t -v "${DIR_MOUNT_TARGET}":"${DOCKER_DIR_MOUNT_DIST}" "${DOCKER_IMAGE_FFMPEG}" -i "${INPUT_FILE_PATH}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
+
+measured_i="$(echo "${mp3_data_json}" | jq '.input_i' | sed -e 's/"//g')"
+measured_tp="$(echo "${mp3_data_json}" | jq '.input_tp' | sed -e 's/"//g')"
+measured_lra="$(echo "${mp3_data_json}" | jq '.input_lra' | sed -e 's/"//g')"
+
+measured_value="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}"
+
+EBU_R128_FILTER="${ebu_r128_general_value}:${measured_value}:linear=true:print_format=summary"
+SOUND_QUALITY=2
+
+
+docker run --rm -t -v "${DIR_MOUNT_TARGET}":"${DOCKER_DIR_MOUNT_DIST}" "${DOCKER_IMAGE_FFMPEG}" -i "${INPUT_FILE_PATH}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${OUTPUT_FILE_PATH}"
+
+exit 0

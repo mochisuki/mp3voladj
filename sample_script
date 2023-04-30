@@ -1,0 +1,16 @@
+#/bin/bash
+
+# 複数ファイルを処理したい場合の一例です。
+
+# 複数のMP3ファイルが保存されているディレクトリ(階層構造は対応してないす)
+TARGET_DIR='/your/target/dir'
+
+for file in $(ls "${TARGET_DIR}"); do
+  if [ -d "${TARGET_DIR}/${file}" ]; then
+    continue
+  fi
+
+  ./mp3_vol_adjustment ${TARGET_DIR} ${file} ${file}
+done
+
+exit 0

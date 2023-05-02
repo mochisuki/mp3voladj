@@ -3,8 +3,28 @@
 set -eu
 
 
+#############################
+# Host machine side settings
+#############################
+
+# Plase enter full path.
 HOST_FILEPATH_INPUT="$1"
 HOST_FILEPATH_OUTPUT="$2"
+
+HOST_FILENAME_INPUT="$(basename "${HOST_FILEPATH_INPUT}")"
+HOST_FILENAME_OUTPUT="$(basename "${HOST_FILEPATH_OUTPUT}")"
+HOST_DIRPATH_INPUT="$(dirname "${HOST_FILEPATH_INPUT}")"
+HOST_DIRPATH_OUTPUT="$(dirname "${HOST_FILEPATH_OUTPUT}")"
+
+
+# Docker container side settings.
+DOCKER_IMAGE_FFMPEG='jrottenberg/ffmpeg'
+
+DOCKER_DIRPATH_INPUT="/ffmpeg/input"
+DOCKER_DIRPATH_OUTPUT="/ffmpeg/output"
+DOCKER_FILEPATH_INPUT="${DOCKER_DIRPATH_INPUT}/${HOST_FILENAME_INPUT}"
+DOCKER_FILEPATH_OUTPUT="${DOCKER_DIRPATH_OUTPUT}/${HOST_FILENAME_OUTPUT}"
+
 
 
 if !(type 'jq' > /dev/null 2>&1); then
@@ -14,13 +34,6 @@ if !(type 'jq' > /dev/null 2>&1); then
 
    exit 1
 fi
-
-
-
-HOST_FILENAME_INPUT="$(basename "${HOST_FILEPATH_INPUT}")"
-HOST_FILENAME_OUTPUT="$(basename "${HOST_FILEPATH_OUTPUT}")"
-HOST_DIRNAME_INPUT="$(dirname "${HOST_FILEPATH_INPUT}")"
-HOST_DIRPATH_OUTPUT="$(dirname "${HOST_FILEPATH_OUTPUT}")"
 
 if [ ! -f "${HOST_FILEPATH_INPUT}" ]; then
     echo ""${HOST_FILEPATH_INPUT}" does not exist." 1>&2
@@ -38,20 +51,9 @@ if [ -f "${HOST_FILEPATH_OUTPUT}" ]; then
 fi
 
 
-
-# Docker container directory settings.
-DOCKER_IMAGE_FFMPEG='jrottenberg/ffmpeg'
-DOCKER_DIRPATH_INPUT="/ffmpeg/input"
-DOCKER_DIRPATH_OUTPUT="/ffmpeg/output"
-
-DOCKER_FILEPATH_INPUT="${DOCKER_DIRPATH_INPUT}/${HOST_FILENAME_INPUT}"
-DOCKER_FILEPATH_OUTPUT="${DOCKER_DIRPATH_OUTPUT}/${HOST_FILENAME_OUTPUT}"
-
-
 ebu_r128_general_value='I=-23:LRA=7:TP=-2.0'
 
-
-mp3_data_json="$(docker run --rm -t -v "${HOST_DIRNAME_INPUT}":"${DOCKER_DIRPATH_INPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
+mp3_data_json="$(docker run --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
 
 measured_i="$(echo "${mp3_data_json}" | jq '.input_i' | sed -e 's/"//g')"
 measured_tp="$(echo "${mp3_data_json}" | jq '.input_tp' | sed -e 's/"//g')"
@@ -63,6 +65,6 @@ EBU_R128_FILTER="${ebu_r128_general_value}:${measured_value}:linear=true:print_f
 SOUND_QUALITY=2
 
 
-docker run --rm -t -v "${HOST_DIRNAME_INPUT}":"${DOCKER_DIRPATH_INPUT}" -v "${HOST_DIRPATH_OUTPUT}":"${DOCKER_DIRPATH_OUTPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${DOCKER_FILEPATH_OUTPUT}"
+docker run --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" -v "${HOST_DIRPATH_OUTPUT}":"${DOCKER_DIRPATH_OUTPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${DOCKER_FILEPATH_OUTPUT}"
 
 exit 0

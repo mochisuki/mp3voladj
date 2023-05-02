@@ -18,15 +18,6 @@ DOCKER_DIR_OUTPUT_DIST="/ffmpeg/${DIRNAME_OUTPUT}"
 INPUT_FILE_PATH="${DOCKER_DIR_MOUNT_DIST}/${FILENAME_INPUT}"
 OUTPUT_FILE_PATH="${DOCKER_DIR_OUTPUT_DIST}/${FILENAME_OUTPUT}"
 
-
-if [ -z "$(docker images -q ${FFMPEG_IMAGE})"  ]; then
-   echo "ERROR: ${FFMPEG_IMAGE} docker image does not exist." 1>&2
-   echo "Please download ${FFMPEG_IMAGE} docker image." 1>&2
-   echo "$ docker pull ${FFMPEG_IMAGE}" 1>&2
-
-   exit 1
-fi
-
 if !(type 'jq' > /dev/null 2>&1); then
    echo "ERROR: jq command does not exist." 1>&2
    echo "Please install jq command" 1>&2

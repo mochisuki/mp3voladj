@@ -1,58 +1,112 @@
 #!/bin/bash
 
-# output dist directory name.
-DIRNAME_OUTPUT='output'
+set -eu
 
-# local directory settings.
-DIR_MOUNT_TARGET="$1"
-FILENAME_INPUT="$2"
-FILENAME_OUTPUT="$3"
 
-DIR_OUTPUT_DIST="${DIR_MOUNT_TARGET}/${DIRNAME_OUTPUT}"
+CMDNAME="$(basename $0)"
 
-# Docker container directory settings.
+usage_exit() {
+    cat <<HELP
+Usage: ${CMDNAME} SOURCE DEST
+
+The volume of the MP3 file specified in SOURCE is adjusted to the EBU R128 standard and output to DEST.
+
+Note: ONLY TESTED ON MAC OS.
+
+[OPTION]
+    -h   Display this help and exit.
+
+[DEPENDENCIES]
+    jq
+         Used to handle audio information in MP3 files, which can be obtained by ffmpeg.
+    docker
+         Adjust the volume in the docker image for ffmpeg.
+HELP
+
+    exit 1;
+}
+
+
+while getopts "h" OPT; do
+    case "${OPT}" in
+        h | *)
+            usage_exit
+            ;;
+    esac
+done
+
+
+#############################
+# Host machine side settings
+#############################
+
+# Plase enter full path.
+HOST_FILEPATH_INPUT="$1"
+HOST_FILEPATH_OUTPUT="$2"
+
+HOST_FILENAME_INPUT="$(basename "${HOST_FILEPATH_INPUT}")"
+HOST_FILENAME_OUTPUT="$(basename "${HOST_FILEPATH_OUTPUT}")"
+HOST_DIRPATH_INPUT="$(dirname "${HOST_FILEPATH_INPUT}")"
+HOST_DIRPATH_OUTPUT="$(dirname "${HOST_FILEPATH_OUTPUT}")"
+
+
+# Docker container side settings.
 DOCKER_IMAGE_FFMPEG='jrottenberg/ffmpeg'
-DOCKER_DIR_MOUNT_DIST='/ffmpeg'
-DOCKER_DIR_OUTPUT_DIST="/ffmpeg/${DIRNAME_OUTPUT}"
 
-INPUT_FILE_PATH="${DOCKER_DIR_MOUNT_DIST}/${FILENAME_INPUT}"
-OUTPUT_FILE_PATH="${DOCKER_DIR_OUTPUT_DIST}/${FILENAME_OUTPUT}"
+DOCKER_DIRPATH_INPUT="/ffmpeg/input"
+DOCKER_DIRPATH_OUTPUT="/ffmpeg/output"
+DOCKER_FILEPATH_INPUT="${DOCKER_DIRPATH_INPUT}/${HOST_FILENAME_INPUT}"
+DOCKER_FILEPATH_OUTPUT="${DOCKER_DIRPATH_OUTPUT}/${HOST_FILENAME_OUTPUT}"
 
 
-if [ -z "$(docker images -q ${FFMPEG_IMAGE})"  ]; then
-   echo "ERROR: ${FFMPEG_IMAGE} docker image does not exist." 1>&2
-   echo "Please download ${FFMPEG_IMAGE} docker image." 1>&2
-   echo "$ docker pull ${FFMPEG_IMAGE}" 1>&2
+puts_error_msg() {
+    msg="$1"
 
-   exit 1
-fi
+    echo "ERROR: ${msg}" 1>&2
+}
+
 
 if !(type 'jq' > /dev/null 2>&1); then
-   echo "ERROR: jq command does not exist." 1>&2
-   echo "Please install jq command" 1>&2
-   echo "$ brew install jq" 1>&2
+   puts_error_msg "\"jq\" command does not exist."
+   puts_error_msg "Please install jq command"
 
    exit 1
-
 fi
 
-mkdir -p "${DIR_OUTPUT_DIST}"
+if [ ! -f "${HOST_FILEPATH_INPUT}" ]; then
+    puts_error_msg ""${HOST_FILEPATH_INPUT}" does not exist."
+    exit 1
+fi
+
+if [ ! -d "${HOST_DIRPATH_OUTPUT}" ]; then
+    puts_error_msg ""${HOST_DIRPATH_OUTPUT}" does not exist."
+    exit 1
+fi
+
+if [ -f "${HOST_FILEPATH_OUTPUT}" ]; then
+    puts_error_msg "Same name file already exists at the output destination."
+    exit 1
+fi
 
 
-ebu_r128_general_value='I=-23:LRA=7:TP=-2.0'
+build_ebu_r128_filter() {
+  ebu_r128_general_value='I=-23:LRA=7:TP=-2.0'
 
-mp3_data_json="$(docker run --rm -t -v "${DIR_MOUNT_TARGET}":"${DOCKER_DIR_MOUNT_DIST}" "${DOCKER_IMAGE_FFMPEG}" -i "${INPUT_FILE_PATH}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
+  mp3_data_json="$(docker run --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
 
-measured_i="$(echo "${mp3_data_json}" | jq '.input_i' | sed -e 's/"//g')"
-measured_tp="$(echo "${mp3_data_json}" | jq '.input_tp' | sed -e 's/"//g')"
-measured_lra="$(echo "${mp3_data_json}" | jq '.input_lra' | sed -e 's/"//g')"
+  measured_i="$(echo "${mp3_data_json}" | jq '.input_i' | sed -e 's/"//g')"
+  measured_tp="$(echo "${mp3_data_json}" | jq '.input_tp' | sed -e 's/"//g')"
+  measured_lra="$(echo "${mp3_data_json}" | jq '.input_lra' | sed -e 's/"//g')"
+  measured_value="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}"
 
-measured_value="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}"
 
-EBU_R128_FILTER="${ebu_r128_general_value}:${measured_value}:linear=true:print_format=summary"
+  echo "${ebu_r128_general_value}:${measured_value}:linear=true:print_format=summary"
+}
+
+
+EBU_R128_FILTER="$(build_ebu_r128_filter)"
 SOUND_QUALITY=2
 
-
-docker run --rm -t -v "${DIR_MOUNT_TARGET}":"${DOCKER_DIR_MOUNT_DIST}" "${DOCKER_IMAGE_FFMPEG}" -i "${INPUT_FILE_PATH}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${OUTPUT_FILE_PATH}"
+docker run --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" -v "${HOST_DIRPATH_OUTPUT}":"${DOCKER_DIRPATH_OUTPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${DOCKER_FILEPATH_OUTPUT}"
 
 exit 0

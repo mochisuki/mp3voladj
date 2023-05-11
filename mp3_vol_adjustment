@@ -59,27 +59,32 @@ DOCKER_FILEPATH_INPUT="${DOCKER_DIRPATH_INPUT}/${HOST_FILENAME_INPUT}"
 DOCKER_FILEPATH_OUTPUT="${DOCKER_DIRPATH_OUTPUT}/${HOST_FILENAME_OUTPUT}"
 
 
+puts_error_msg() {
+    msg="$1"
+
+    echo "ERROR: ${msg}" 1>&2
+}
+
 
 if !(type 'jq' > /dev/null 2>&1); then
-   echo "ERROR: \"jq\" command does not exist." 1>&2
-   echo "ERROR: Please install jq command" 1>&2
-   echo "ERROR: (ex)$ brew install jq" 1>&2
+   puts_error_msg "\"jq\" command does not exist."
+   puts_error_msg "Please install jq command"
 
    exit 1
 fi
 
 if [ ! -f "${HOST_FILEPATH_INPUT}" ]; then
-    echo ""${HOST_FILEPATH_INPUT}" does not exist." 1>&2
+    puts_error_msg ""${HOST_FILEPATH_INPUT}" does not exist."
     exit 1
 fi
 
 if [ ! -d "${HOST_DIRPATH_OUTPUT}" ]; then
-    echo ""${HOST_DIRPATH_OUTPUT}" does not exist." 1>&2
+    puts_error_msg ""${HOST_DIRPATH_OUTPUT}" does not exist."
     exit 1
 fi
 
 if [ -f "${HOST_FILEPATH_OUTPUT}" ]; then
-    echo "Same name file already exists at the output destination." 1>&2
+    puts_error_msg "Same name file already exists at the output destination."
     exit 1
 fi
 

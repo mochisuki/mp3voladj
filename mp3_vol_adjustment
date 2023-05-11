@@ -3,6 +3,39 @@
 set -eu
 
 
+CMDNAME="$(basename $0)"
+
+usage_exit() {
+    cat <<HELP
+Usage: ${CMDNAME} SOURCE DEST
+
+The volume of the MP3 file specified in SOURCE is adjusted to the EBU R128 standard and output to DEST.
+
+Note: ONLY TESTED ON MAC OS.
+
+[OPTION]
+    -h   Display this help and exit.
+
+[DEPENDENCIES]
+    jq
+         Used to handle audio information in MP3 files, which can be obtained by ffmpeg.
+    docker
+         Adjust the volume in the docker image for ffmpeg.
+HELP
+
+    exit 1;
+}
+
+
+while getopts "h" OPT; do
+    case "${OPT}" in
+        h | *)
+            usage_exit
+            ;;
+    esac
+done
+
+
 #############################
 # Host machine side settings
 #############################

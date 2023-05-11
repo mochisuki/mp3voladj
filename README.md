@@ -1,98 +1,81 @@
-# mp3_vol_adjustment
-* ffmpegを使用して、EBU_R128規格でmp3ファイルの音量を調節してくれるといいなと。
-* ざっくり作っちゃったので、諸々問題あるかもですが、一応動くといいな。
+# mp3voladj
+* Use ffmpeg to adjust the volume of mp3 files in EBU_R128 standard.
+* (I made this roughly, so I'm sure there will be problems...)
 
-## 動作環境
-* macOS(のつもりです)
-    * ffmpegはdocker使って実行させてるし、M1 macでもいけるはず。
+## Tested Environments
+* macOS
 
-## やってほしいこと
-* dockerのインストール
-* docker image である、 jrottenberg/ffmpeg をpull
-    * docker pull jrottenberg/ffmpeg
-* jqコマンドのインストール
-    * brew install jq
+## Preparation
+* Install Docker
+* Install jq command
+* (Optional) Pull the docker image jrottenberg/ffmpeg (not mandatory as it will be fetched by docker run command)
 
-## スクリプトについて
-* ffmpegを使用して、EBU_R128規格でmp3ファイルをエンコードします。
-* 3つの引数を取ります。
-    * 第1引数: mp3ファイルが置かれているディレクトリのフルパス
-    * 第2引数: 音量を調整したいmp3ファイル(入力ファイル)
-    * 第3引数: 音量調節後のmp3ファイル(出力ファイル)
+## Script Overview
+* This script uses ffmpeg from the jrottenberg/ffmpeg docker image to encode mp3 files according to the EBU_R128 standard.
+* It takes two arguments:
+    * Argument 1: Full path of the input mp3 file
+    * Argument 2: Full path of the output mp3 file
 
-## 実行サンプル
+## Execution Example
 
 ```
 # [Before] Directory Structure
 # /your/target/dir
-#               ├── sample1.mp3
-#               ├── sample2.mp3
-#               └── sample3.mp3
+#               ├input
+#               │   ├── sample1.mp3
+#               │   ├── sample2.mp3
+#               │   └── sample3.mp3
+#               └output
 
 # Execute script.
-$ TARGET_DIR='/your/target/dir'
-$ INPUT_FILE_NAME='sample1.mp3'
-$ OUTPUT_FILE_NAME='encoded_sample1.mp3'
-$ mp3_vol_adjustment ${TARGET_DIR} ${INPUT_FILE_NAME} ${OUTPUT_FILE_NAME}
+$ INPUT_FILE_NAME='/your/target/dir/input/sample1.mp3'
+$ OUTPUT_FILE_NAME='/your/target/dir/output/encoded_sample1.mp3'
+$ mp3voladj ${INPUT_FILE_NAME} ${OUTPUT_FILE_NAME}
 
 
 # [After] Directory Structure
 # /your/target/dir
-#               ├── output
-#               │        └── encoded_sample1.mp3
-#               ├── sample1.mp3
-#               ├── sample2.mp3
-#               └── sample3.mp3
+#               ├input
+#               │   ├── sample1.mp3
+#               │   ├── sample2.mp3
+#               │   └── sample3.mp3
+#               └output
+#                    └── encoded_sample1.mp3
 ```
 
-## やってること
-
-以下の処理の流れをシェルスクリプトでまとめた感じです。
-(ffmpegの実行は、jrottenberg/ffmpeg のdocker imageを通して実行してます。)
-
-1. 下のコマンドで、対象mp3ファイルの情報を取得
-
-`$ ffmpeg -i input.mp3 -af loudnorm=I=-23:LRA=7:TP=-2.0:print_format=json -f null -`
-
-2. 1.で得られた結果を measured_X に適応して、再エンコードする
-
-`$ ffmpeg -i input.mp3 -af loudnorm=I=-23:LRA=7:TP=-2.0:measured_I=-23.2:measured_LRA=6.5:measured_TP=-2.5:linear=true:print_format=summary -codec:a libmp3lame -q:a 2 output.mp3`
-
-
-### 今回使用したffmpegのオプション説明
+## Explanation of ffmpeg Options Used
 * loudnorm
-    * 音量を正規化するためのフィルター
-    * EBU R128規格に基づいたアルゴリズムを使用して音量を自動調整
+    * A filter used to normalize the volume
+    * Automatically adjusts the volume using an algorithm based on the EBU R128 standard.
 * I
-    * 目標の平均音量を指定
-    * -23は一般的な目標音量
+    * Specifies the target average volume
+    * -23 is a common target volume.
 * LRA
-    * 目標の音量範囲を指定
-    * 7は一般的な値
+    * Specifies the target volume range
+    * 7 is a common value.
 * TP
-    * 目標ピーク音量を指定
-    * -2.0は一般的な値
+    * Specifies the target peak volume
+    * -2.0 is a common value.
 * measured_I
-    * 実際に計測された平均音量を指定
+    * Specifies the measured average volume
 * measured_LRA
-    * 実際に計測された音量範囲を指定
+    * Specifies the measured volume range
 * measured_TP
-    * 実際に計測されたピーク音量を指定
+    * Specifies the measured peak volume
 * linear
-    * 音量正規化を線形モードで行うかどうかを指定
-    * trueに設定されている場合は線形モードで処理 (音量の変換にロスのない処理)
+    * Specifies whether to perform volume normalization in linear mode
+    * If set to true, it processes in linear mode, which results in lossless volume conversion.
 * print_format
-    * 結果の出力形式を指定
-    * summary: 簡略的な形式で出力
+    * Specifies the output format of the result
+    * summary: Output in a concise format.
 
 * -codec:a libmp3lame
-    * 出力ファイルの音声コーデックを指定するオプション
-    * この場合、libmp3lameというMP3のエンコーダが指定されていmす
- 
+    * Option to specify the audio codec of the output file
+    * In this case, libmp3lame, an MP3 encoder, is specified.
 * -q:a 2
-    * 音質を指定するオプション
-    * 2は、音声の品質を指定するオプション
-        * 2は、比較的高音質でありながら、ファイルサイズを大幅に削減することが可能らしいです。
-    * 0から9の範囲で指定可能
-        * 0: 最高品質
-        * 9: 最低品質
+    * Option to specify the audio quality
+    * 2 is an option to specify the quality of the audio.
+        * 2 provides relatively high quality while significantly reducing file size.
+    * Can be specified in the range of 0 to 9.
+        * 0: Highest quality
+        * 9: Lowest quality

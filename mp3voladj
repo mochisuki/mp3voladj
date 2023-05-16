@@ -92,7 +92,7 @@ fi
 build_ebu_r128_filter() {
   ebu_r128_general_value='I=-23:LRA=7:TP=-2.0'
 
-  mp3_data_json="$(docker run --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
+  mp3_data_json="$(docker run --platform=linux/amd64 --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
 
   measured_i="$(echo "${mp3_data_json}" | jq '.input_i' | sed -e 's/"//g')"
   measured_tp="$(echo "${mp3_data_json}" | jq '.input_tp' | sed -e 's/"//g')"
@@ -107,6 +107,6 @@ build_ebu_r128_filter() {
 EBU_R128_FILTER="$(build_ebu_r128_filter)"
 SOUND_QUALITY=2
 
-docker run --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" -v "${HOST_DIRPATH_OUTPUT}":"${DOCKER_DIRPATH_OUTPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${DOCKER_FILEPATH_OUTPUT}"
+docker run --platform=linux/amd64 --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" -v "${HOST_DIRPATH_OUTPUT}":"${DOCKER_DIRPATH_OUTPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${EBU_R128_FILTER}" -codec:a libmp3lame -q:a "${SOUND_QUALITY}" -y "${DOCKER_FILEPATH_OUTPUT}"
 
 exit 0

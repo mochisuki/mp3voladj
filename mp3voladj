@@ -88,17 +88,40 @@ if [ -f "${HOST_FILEPATH_OUTPUT}" ]; then
     exit 1
 fi
 
+_get_json_elem() {
+  json="$1"
+  key="$2"
+
+  echo "${json}" | jq ".${key}" | sed -e 's/"//g'
+}
+
+_generate_ebu_r128_general_value() {
+  i=-23
+  lra=7
+  tp=-2.0
+
+  echo "I=${i}:LRA=${lra}:TP=${tp}"
+}
+
+_generate_measured_value() {
+  measured_i="$1"
+  measured_lra="$2"
+  measured_tp="$3"
+
+  echo "measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}"
+}
+
 
 build_ebu_r128_filter() {
-  ebu_r128_general_value='I=-23:LRA=7:TP=-2.0'
+  ebu_r128_general_value="$(_generate_ebu_r128_general_value)"
 
   mp3_data_json="$(docker run --platform=linux/amd64 --rm -t -v "${HOST_DIRPATH_INPUT}":"${DOCKER_DIRPATH_INPUT}" "${DOCKER_IMAGE_FFMPEG}" -i "${DOCKER_FILEPATH_INPUT}" -af loudnorm="${ebu_r128_general_value}":print_format=json -f null - | grep -A 100 -e '{' | grep -B 100 -e '}')"
 
-  measured_i="$(echo "${mp3_data_json}" | jq '.input_i' | sed -e 's/"//g')"
-  measured_tp="$(echo "${mp3_data_json}" | jq '.input_tp' | sed -e 's/"//g')"
-  measured_lra="$(echo "${mp3_data_json}" | jq '.input_lra' | sed -e 's/"//g')"
-  measured_value="measured_I=${measured_i}:measured_LRA=${measured_lra}:measured_TP=${measured_tp}"
+  measured_i="$(_get_json_elem "${mp3_data_json}" 'input_i')"
+  measured_tp="$(_get_json_elem "${mp3_data_json}" 'input_tp')"
+  measured_lra="$(_get_json_elem "${mp3_data_json}" 'input_lra')"
 
+  measured_value="$(_generate_measured_value "${measured_i}" "${measured_lra}" "${measured_tp}")"
 
   echo "${ebu_r128_general_value}:${measured_value}:linear=true:print_format=summary"
 }
